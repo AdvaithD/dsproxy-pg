@@ -55,6 +55,12 @@ interface ManagerLike {
     function shift(uint, uint) external;
 }
 
+// wad - quantity of tokens usually with 18 decimals
+// gem - collateral tokens
+// vat - vault engine
+// urn - a specific vault (int - collateral balance, art - stablecoin debt thats outstanding)
+// .frob() - modify a vault (wipe, dink, free, draw etc)
+// dart - tokens to exchange
 
 contract Delev {
   function _getWipeDart(
@@ -73,13 +79,31 @@ contract Delev {
   }
 
   function wipeWithEth(
-    address manager,
-    address ethJoin,
-    address daiJoin,
-    address oasisMatchingMarket,
-    uint cdp,
-    uint wadEth
+    address manager, // cdp manager address
+    address ethJoin, // makerdao eth adapter
+    address daiJoin, // makerdao dai adapter
+    address oasisMatchingMarket, // address of oasis matching contract
+    uint cdp, // cdp identifier
+    uint wadEth // eth amount
   ) public {
-
+      require(wadEth > 0); // make sure a nonzero amount of eth is being removed
+      address urn = ManagerLike(manager).urns(cdp); // urn pointer for the vault
+      ManagerLike(manager).frob(cdp, -int(wadEth), int(0)); // Remove WETH from the vault
+      ManagerLike(manager).flux(cdp, address(this), wadEth); // Move et from CDP to proxy account
+      GemJoinLike(ethJoin).exit(address(this), wadEth); // Exit WETH to proxy as a token
+      // --- State: ETH ewithdrawn from vault, but we are undercollateralized --> results in a revert
+      GemJoinLike(ethJoin).gem().approve(oasisMatchingMarket, wadEth); // approve oasis to retrieve your eth
+      uint daiAmt = OasisLike(oasisMatchingMarket).sellAllAmount( // Market order to sell all the WETH -> DAI
+          address(GemJoinLike(ethJoin).gem()),
+          wadEth,
+          address(DaiJoinLike(daiJoin).dai()),
+          uint(0)
+      )
+      // TODO: Use oracles instead of market selling
+      // --- State: ETH withdrawn, market sold for DAI
+      DaiJoinLike(daiJoin).dai().approve(daiJoin, daiAmt); // approve dai a dapterto take our DAI
+      DaiJoinLike(daiJoin).join(urn, daiAmt); // call join to send DAI into the vault
+      int dart = _getWipeDart(ManagerLike(manager).vat(), VatLike(ManagerLike(manager).vat()).dai(urn), urn, ManagerLike(manager).ilks(cdp));
+      ManagerLike(manager).frob(cdp, int(0), dart)
   }
 }
