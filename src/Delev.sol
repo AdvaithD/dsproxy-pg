@@ -68,14 +68,15 @@ contract Delev {
     uint dai,
     address urn,
     bytes32 ilk
-  ) internal view returns (int dat) {
+  ) internal view returns (int dart) {
       // g ets the rate from the vat
       (, uint rate,,,) = VatLike(vat).ilks(ilk);
       // get actual art val from the urn
       (, uint art) = VatLike(vat).urns(ilk, urn);
-      dart = int(dat / rate);
+      dart = int(dai / rate);
       // check if valulated dart is not higher than urn.art (total debt) else use the val
-      dart - uint(dart) <= art ? - dart : int(art);
+      dart = uint(dart) <= art ? - dart : - int(art);
+
   }
 
   function wipeWithEth(
@@ -98,12 +99,12 @@ contract Delev {
           wadEth,
           address(DaiJoinLike(daiJoin).dai()),
           uint(0)
-      )
+      );
       // TODO: Use oracles instead of market selling
       // --- State: ETH withdrawn, market sold for DAI
       DaiJoinLike(daiJoin).dai().approve(daiJoin, daiAmt); // approve dai a dapterto take our DAI
       DaiJoinLike(daiJoin).join(urn, daiAmt); // call join to send DAI into the vault
       int dart = _getWipeDart(ManagerLike(manager).vat(), VatLike(ManagerLike(manager).vat()).dai(urn), urn, ManagerLike(manager).ilks(cdp));
-      ManagerLike(manager).frob(cdp, int(0), dart)
+      ManagerLike(manager).frob(cdp, int(0), dart);
   }
 }
